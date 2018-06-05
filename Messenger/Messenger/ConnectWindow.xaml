@@ -1,0 +1,47 @@
+﻿<Window x:Class="Messenger.ConnectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Messenger"
+        mc:Ignorable="d"
+        Title="Подключение" Height="350" Width="300" ResizeMode="NoResize">
+    <Window.Resources>
+        <Style TargetType="Label">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Width" Value="200"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="BorderBrush" Value="Black"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="51*"/>
+            <RowDefinition Height="218*"/>
+        </Grid.RowDefinitions>
+
+        <Label Content="Подключение к серверу" VerticalAlignment="Center"
+               Height="42" Margin="29,6,29,3" Width="234"/>
+        <Rectangle Height="3" VerticalAlignment="Bottom" Fill="Black"/>
+
+        <StackPanel Orientation="Vertical" Grid.Row="1" HorizontalAlignment="Center" Margin="61,0" Width="170">
+            <Label Content="Порт"/>
+            <TextBox Name="PortText" FontSize="18" Width="150" Margin="5"/>
+
+            <Label Content="IP адрес"/>
+            <TextBox Name="IpAddressText" FontSize="18" Width="150" Margin="5"/>
+
+            <Button Name="ConnectBtn" Content="Подключится" Width="150" Height="40"
+                    FontSize="20" Margin="0,10,0,0" Click="ConnectBtnClick"/>
+
+        </StackPanel>
+
+        <TextBlock Name="ErrorText" Grid.Row="1" FontSize="14" TextWrapping="Wrap"
+                   VerticalAlignment="Bottom" Margin="10,0,10,10" Foreground="Red" Height="41"/>
+    </Grid>
+</Window>
