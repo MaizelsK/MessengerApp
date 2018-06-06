@@ -76,6 +76,7 @@
     <Compile Include="ConnectWindow.xaml.cs">
       <DependentUpon>ConnectWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="FileMetadata.cs" />
     <Compile Include="Greeting.xaml.cs">
       <DependentUpon>Greeting.xaml</DependentUpon>
     </Compile>

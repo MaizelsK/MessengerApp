@@ -45,8 +45,8 @@
                 <TextBlock Text="Прикрепить файл" FontSize="15"
                            VerticalAlignment="Center" Margin="6"/>
 
-                <Button Content="Обзор" Margin="5,3" Width="60" Background="#FF185178" 
-                        Foreground="White" BorderBrush="Black"/>
+                <Button Name="AttachFileBtn" Content="Обзор" Margin="5,3" Width="60" Background="#FF185178" 
+                        Foreground="White" BorderBrush="Black" Click="AttachFileBtnClick"/>
 
                 <TextBlock Name="FileNameBlock" FontSize="15" Margin="6"
                            VerticalAlignment="Center"/>

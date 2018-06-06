@@ -128,9 +128,9 @@ namespace MessengerServer
         // Рассылка сообщения всем клиентам
         private static void SendToAllClients(string message)
         {
-            try
+            foreach (TcpClient client in clients)
             {
-                foreach (TcpClient client in clients)
+                try
                 {
                     using (var stream = client.GetStream())
                     {
@@ -140,10 +140,10 @@ namespace MessengerServer
                         }
                     }
                 }
-            }
-            catch (SocketException ex)
-            {
-                Console.WriteLine(ex.Message);
+                catch(SocketException ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
             }
         }
 
