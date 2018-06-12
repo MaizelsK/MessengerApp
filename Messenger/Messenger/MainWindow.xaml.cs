@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
@@ -23,28 +24,32 @@ namespace Messenger
     public partial class MainWindow : Window
     {
         public TcpClient client = new TcpClient();
-        public string ClientName;
+        public NetworkStream networkStream;
 
+        public string ClientName;
         private bool isFileAttached;
         private string filePath;
+        private const int packetSize = 1024;
 
         public ObservableCollection<Message> messages = new ObservableCollection<Message>();
 
         public MainWindow()
         {
             InitializeComponent();
+
             ChatListBox.ItemsSource = messages;
+            NewConnection();
 
-            ConnectWindow connectWindow = new ConnectWindow(client);
-            connectWindow.ShowDialog();
-
+            // Приветствие пользователя
             Greeting greeting = new Greeting(this);
             greeting.ShowDialog();
 
             Task.Run(() => { HandleClient(); });
         }
 
-        #region Обработка входящих сообщений
+        #region Обработка входящих и исходящих сообщений
+
+        // Обработка пользователя
         private void HandleClient()
         {
             try
@@ -55,7 +60,15 @@ namespace Messenger
 
                     if (message != null)
                     {
-                        messages.Add(message);
+                        if (!message.IsDownloadRequest)
+                        {
+                            message.Sender += ": ";
+
+                            Dispatcher.Invoke(() =>
+                            {
+                                messages.Add(message);
+                            });
+                        }
                     }
                 }
             }
@@ -63,55 +76,177 @@ namespace Messenger
             {
                 MessageBox.Show(ex.Message);
             }
-
-            CloseConnection();
+            catch (IOException ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
         }
 
+        // Получения ответа от сервера
         private Message GetResponce()
         {
             Message message;
 
+            int bytesRead;
+            int allBytesRead = 0;
+            byte[] messageBytes = new byte[packetSize];
+
             try
             {
-                using (var stream = client.GetStream())
-                {
-                    using (var reader = new StreamReader(stream))
-                    {
-                        string response = reader.ReadToEnd();
+                bytesRead = networkStream.Read(messageBytes, 0, packetSize);
 
-                        message = JsonConvert.DeserializeObject<Message>(response);
+                // Получения сообщения и метаданных файла из первых 1024 байт
+                string messageJson = Encoding.Default.GetString(messageBytes);
+                message = JsonConvert.DeserializeObject<Message>(messageJson);
+
+                if (message != null && message.IsDownloadRequest)
+                {
+                    byte[] fileData = new byte[message.Metadata.FileSize];
+                    int bytesLeft = (int)message.Metadata.FileSize;
+
+                    // Получения самого файла пакетами в 1024 байта
+                    while (bytesLeft > 0)
+                    {
+                        int nextPacketSize = (bytesLeft > packetSize) ? packetSize : bytesLeft;
+
+                        bytesRead = networkStream.Read(fileData, allBytesRead, nextPacketSize);
+                        allBytesRead += bytesRead;
+                        bytesLeft -= bytesRead;
                     }
+
+                    FileHelper.SaveFile(message.Metadata, fileData);
                 }
             }
-            catch (SocketException ex)
+            catch (IOException ex)
+            {
+                throw ex;
+            }
+            catch (InvalidOperationException ex)
             {
                 throw ex;
             }
 
             return message;
         }
+
+        // Отправка сообщения
+        private void SendMessage(Message message)
+        {
+            byte[] data;
+
+            if (isFileAttached)
+            {
+                data = new byte[message.Metadata.FileSize + 1024];
+
+                byte[] fileData;
+                using (FileStream fs = File.OpenRead(message.Metadata.FilePath))
+                {
+                    fileData = new byte[message.Metadata.FileSize];
+                    fs.Read(fileData, 0, (int)message.Metadata.FileSize);
+                }
+
+                Array.Copy(fileData, 0, data, packetSize, fileData.Length);
+            }
+            else
+                data = new byte[packetSize];
+
+            // Вставка сообщения и метаданных в начало массива всех данных
+            byte[] messageJson = Encoding.Default.GetBytes(JsonConvert.SerializeObject(message));
+            Array.Resize(ref messageJson, packetSize);
+            Array.Copy(messageJson, data, packetSize);
+
+            int bytesSent = 0;
+            int bytesLeft = data.Length;
+
+            try
+            {
+                while (bytesLeft > 0)
+                {
+                    int nextPacketSize = (bytesLeft > packetSize) ? packetSize : bytesLeft;
+
+                    networkStream.Write(data, bytesSent, nextPacketSize);
+                    bytesSent += nextPacketSize;
+                    bytesLeft -= nextPacketSize;
+                }
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw ex;
+            }
+            catch (IOException ex)
+            {
+                throw ex;
+            }
+        }
+
+        // Запрос на скачивание файла
+        private void RequestFile(FileMetadata metadata)
+        {
+            Message fileRequest = new Message
+            {
+                IsDownloadRequest = true,
+                Metadata = metadata
+            };
+
+            string jsonRequest = JsonConvert.SerializeObject(fileRequest);
+            byte[] requestData = Encoding.Default.GetBytes(jsonRequest);
+
+            try
+            {
+                networkStream.Write(requestData, 0, requestData.Length);
+            }
+            catch (InvalidOperationException ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            catch (IOException ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+        }
+
         #endregion
 
-        // Смена сервера
-        private void ChangeServerClick(object sender, RoutedEventArgs e)
-        {
-            CloseConnection();
-
-            ConnectWindow connectWindow = new ConnectWindow(client);
-            connectWindow.ShowDialog();
-        }
+        #region Работа с соеденением
 
         // Закрытие текущего соеденения
         private void CloseConnection()
         {
+            // Отправка сообщения серверу о том
+            // что клиент отключился
+            SendMessage(new Message
+            {
+                Sender = ClientName,
+                IsDisconnect = true
+            });
+
+            networkStream.Close();
             client.Close();
             client = new TcpClient();
-
-            //socket.Shutdown(SocketShutdown.Both);
-            //socket.Close();
         }
 
-        // Отправка сообщения
+        // Вызов окна нового соеденения
+        private void NewConnection()
+        {
+            ConnectWindow connectWindow = new ConnectWindow(client);
+            connectWindow.ShowDialog();
+
+            if (client.Connected)
+            {
+                networkStream = client.GetStream();
+                Task.Run(() => { HandleClient(); });
+            }
+        }
+
+        #endregion
+
+        #region Обработка нажатий кнопок
+
+        // Подготовка сообщения
         private void SendBtnClick(object sender, RoutedEventArgs e)
         {
             string messageText = MessageTextBox.Text;
@@ -122,106 +257,89 @@ namespace Messenger
                 && isFileAttached == false)
                 return;
 
-            if (!string.IsNullOrWhiteSpace(messageText))
+            Message newMessage = new Message
             {
-                using (var stream = client.GetStream())
-                {
-                    using (var writer = new StreamWriter(stream))
-                    {
-                        Message newMessage = new Message
-                        {
-                            Sender = ClientName,
-                            MessageText = messageText
-                        };
-
-                        string json = JsonConvert.SerializeObject(newMessage);
-                        writer.Write(json);
-                    }
-                }
-            }
+                Sender = ClientName,
+                MessageText = !string.IsNullOrWhiteSpace(messageText) ?
+                                messageText : null
+            };
 
             if (isFileAttached)
             {
-                using (var stream = client.GetStream())
-                {
-                    using (var writer = new StreamWriter(stream))
-                    {
-                        Message newMessage = new Message
-                        {
-                            IsFileAttached = isFileAttached
-                        };
+                newMessage.IsFileAttached = isFileAttached;
+                newMessage.Metadata = FileHelper.GetFileMetadata(filePath);
+            }
 
-                        string json = JsonConvert.SerializeObject(newMessage);
-                        writer.Write(json);
-                    }
-                }
-
-                SendFile();
+            try
+            {
+                SendMessage(newMessage);
+                ClearUI();
+            }
+            catch (InvalidOperationException ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            catch (IOException ex)
+            {
+                MessageBox.Show(ex.Message);
             }
         }
 
-        private void SendFile()
-        {
-            FileMetadata metadata = GetFileMetadata();
-
-            byte[] data = new byte[metadata.FileSize + 512];
-
-            // Вставка метаданных в начало массива всех данных
-            byte[] metadataJson = Encoding.Default.GetBytes(JsonConvert.SerializeObject(metadata));
-            Array.Resize(ref metadataJson, 512);
-            Array.Copy(metadataJson, data, 512);
-
-            byte[] fileData;
-            using (FileStream fs = File.OpenRead(metadata.FilePath))
-            {
-                fileData = new byte[metadata.FileSize];
-                fs.Read(fileData, 0, (int)metadata.FileSize);
-            }
-
-            Array.Copy(fileData, 0, data, 512, fileData.Length);
-
-            int bufferSize = 1024;
-            int bytesSent = 0;
-            int bytesLeft = data.Length;
-
-            using (NetworkStream networkStream = client.GetStream())
-            {
-                while (bytesLeft > 0)
-                {
-
-                    int nextPacketSize = (bytesLeft > bufferSize) ? bufferSize : bytesLeft;
-
-                    networkStream.Write(data, bytesSent, nextPacketSize);
-                    bytesSent += nextPacketSize;
-                    bytesLeft -= nextPacketSize;
-                }
-            }
-        }
-
-        private FileMetadata GetFileMetadata()
-        {
-            FileInfo fileInfo = new FileInfo(filePath);
-
-            FileMetadata metadata = new FileMetadata
-            {
-                FileName = fileInfo.Name,
-                FileSize = fileInfo.Length,
-                FilePath = filePath
-            };
-
-            return metadata;
-        }
-
+        // Прикрепление файла
         private void AttachFileBtnClick(object sender, RoutedEventArgs e)
         {
             OpenFileDialog fileDialog = new OpenFileDialog();
+
             if (fileDialog.ShowDialog() == true)
             {
                 filePath = fileDialog.FileName;
                 isFileAttached = true;
-
                 FileNameBlock.Text = filePath;
             }
+        }
+
+        // Смена сервера
+        private void ChangeServerClick(object sender, RoutedEventArgs e)
+        {
+            CloseConnection();
+
+            Dispatcher.Invoke(() =>
+            {
+                ClearUI(true);
+                NewConnection();
+            });
+        }
+
+        // Обработка нажатия скачивания файла
+        private void DownloadBtnClick(object sender, RoutedEventArgs e)
+        {
+            Button button = sender as Button;
+            var dataContext = button.DataContext;
+            Message selectedMessage = dataContext as Message;
+
+            RequestFile(selectedMessage.Metadata);
+        }
+
+        #endregion
+
+        // При закрытии приложения
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            CloseConnection();
+        }
+
+        // Сброс UI элементов
+        private void ClearUI(bool isServerChange = false)
+        {
+            if (isServerChange)
+            {
+                messages = new ObservableCollection<Message>();
+                ChatListBox.ItemsSource = messages;
+            }
+
+            MessageTextBox.Text = "";
+            isFileAttached = false;
+            FileNameBlock.Text = "";
         }
     }
 }

@@ -32,7 +32,7 @@ namespace Messenger
             this.client = client;
         }
 
-        private void ConnectBtnClick(object sender, RoutedEventArgs e)
+        private async void ConnectBtnClick(object sender, RoutedEventArgs e)
         {
             ErrorText.Text = "";
 
@@ -40,10 +40,7 @@ namespace Messenger
             {
                 try
                 {
-                    //socket.Connect(ipAddress, port);
-                    //client.Connect(new IPEndPoint(ipAddress, port));
-                    client.Connect(new IPEndPoint(ipAddress, port));
-
+                    await client.ConnectAsync(ipAddress, port);
                     Close();
                 }
                 catch (SocketException ex)
@@ -55,7 +52,7 @@ namespace Messenger
 
         private bool ValidateForm()
         {
-            if(string.IsNullOrWhiteSpace(PortText.Text)
+            if (string.IsNullOrWhiteSpace(PortText.Text)
                 || string.IsNullOrWhiteSpace(IpAddressText.Text))
             {
                 ErrorText.Text = "Заполните все поля!";

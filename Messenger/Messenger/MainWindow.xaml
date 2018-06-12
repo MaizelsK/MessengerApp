@@ -5,13 +5,37 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Messenger"
         mc:Ignorable="d"
-        Title="MainWindow" Height="550" Width="650">
+        Title="Messenger Application" Height="550" Width="650"
+        MinHeight="500" MinWidth="500">
     <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        
         <DataTemplate x:Key="listTemplate">
-            <StackPanel Margin="5" Orientation="Horizontal" Height="30">
-                <TextBlock Text="{Binding Path=Sender, StringFormat={}{0::}}" FontSize="15"/>
-                <TextBlock Text="{Binding Path=MessageText}" FontSize="15"/>
-            </StackPanel>
+            <DockPanel Margin="5" LastChildFill="True">
+                <TextBlock Text="{Binding Path=Sender}" FontSize="15" DockPanel.Dock="Left"
+                           TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding Path=MessageText}" FontSize="15" DockPanel.Dock="Left"
+                           TextWrapping="Wrap" ScrollViewer.CanContentScroll="False" MaxWidth="300"/>
+                <Button Content="{Binding Path=Metadata.FileName}" VerticalAlignment="Center"
+                        Margin="15,0,0,0" Foreground="White" BorderBrush="Black" 
+                        Background="#FF185178" Padding="5,5,5,5" DockPanel.Dock="Right"
+                        MaxWidth="100" HorizontalAlignment="Right" Click="DownloadBtnClick">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Path=IsFileAttached}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding  Path=IsFileAttached}" Value="False">
+                                    <Setter Property="Visibility" Value="Hidden" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>                    
+                </Button>
+            </DockPanel>
         </DataTemplate>
     </Window.Resources>
 
@@ -42,20 +66,17 @@
                      Margin="5,0,5,3" BorderBrush="Black"/>
 
             <StackPanel Orientation="Horizontal" Height="32">
-                <TextBlock Text="Прикрепить файл" FontSize="15"
-                           VerticalAlignment="Center" Margin="6"/>
+                <TextBlock Text="Прикрепить файл" FontSize="15" Margin="6"/>
 
-                <Button Name="AttachFileBtn" Content="Обзор" Margin="5,3" Width="60" Background="#FF185178" 
-                        Foreground="White" BorderBrush="Black" Click="AttachFileBtnClick"/>
+                <Button Name="AttachFileBtn" Content="Обзор" Margin="5,3"
+                        Width="60" Click="AttachFileBtnClick"/>
 
-                <TextBlock Name="FileNameBlock" FontSize="15" Margin="6"
-                           VerticalAlignment="Center"/>
+                <TextBlock Name="FileNameBlock" FontSize="12" Margin="6"/>
             </StackPanel>
         </StackPanel>
 
         <Button Name="SendBtn" Grid.Row="1" Grid.Column="1" Content="Отправить"
-                Margin="5" FontSize="18" Background="#FF185178" 
-                Foreground="White" BorderBrush="Black" Click="SendBtnClick"/>
+                Margin="5" FontSize="18" Click="SendBtnClick"/>
 
     </Grid>
 </Window>
