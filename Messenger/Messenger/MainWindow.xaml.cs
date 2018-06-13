@@ -119,6 +119,7 @@ namespace Messenger
                     }
 
                     FileHelper.SaveFile(message.Metadata, fileData);
+                    MessageBox.Show($"Файл {message.Metadata.FileName} успешно сохранен\nв папке Saved Files");
                 }
             }
             catch (IOException ex)
